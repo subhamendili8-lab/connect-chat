@@ -7,10 +7,7 @@ const withPWA = require('next-pwa')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Turbopack ବନ୍ଦ - Vercel Fix
-  experimental: {
-    turbo: false
-  },
+  // Turbopack Line ପୁରା Delete କରିଦିଅ
   
   // Google Image ପାଇଁ
   images: {
@@ -18,6 +15,14 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ui-avatars.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'user-images.githubusercontent.com',
       },
     ],
   },
