@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { db, auth, googleProvider } from '../lib/firebase'
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, where, setDoc, doc, Timestamp } from 'firebase/firestore'
-import { Search, Camera, MoreVertical, MessageSquare, ArrowLeft, Send } from "lucide-react";
+import { Search, Camera, MoreVertical, ArrowLeft, Send } from "lucide-react";
 
 export default function Home() {
   const [user, setUser] = useState(null)
@@ -15,11 +15,16 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('')
   const messagesEndRef = useRef(null)
 
-  // 1. Login Check + User Save + Online Status
+  // 1. Login Check + Online Status + Heartbeat FIX
   useEffect(() => {
+    let heartbeatInterval;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        await setDoc(doc(db, 'users', currentUser.uid), {
+        const userRef = doc(db, 'users', currentUser.uid);
+
+        // Login ହେଲେ Online କର
+        await setDoc(userRef, {
           uid: currentUser.uid,
           displayName: currentUser.displayName,
           photoURL: currentUser.photoURL,
@@ -27,21 +32,53 @@ export default function Home() {
           lastSeen: serverTimestamp(),
           online: true
         }, { merge: true })
+
         setUser(currentUser)
 
-        window.addEventListener('beforeunload', () => {
-          setDoc(doc(db, 'users', currentUser.uid), {
+        // Heartbeat - ପ୍ରତି 30 Sec ରେ Update
+        heartbeatInterval = setInterval(() => {
+          setDoc(userRef, {
+            lastSeen: serverTimestamp(),
+            online: true
+          }, { merge: true })
+        }, 30000)
+
+        // Tab Close/Mobile Background ହେଲେ Offline
+        const goOffline = () => {
+          setDoc(userRef, {
             online: false,
             lastSeen: serverTimestamp()
           }, { merge: true })
+        }
+
+        const goOnline = () => {
+          setDoc(userRef, {
+            online: true,
+            lastSeen: serverTimestamp()
+          }, { merge: true })
+        }
+
+        window.addEventListener('beforeunload', goOffline)
+        window.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            goOffline()
+          } else {
+            goOnline()
+          }
         })
+
       } else {
         setUser(null)
         setSelectedUser(null)
+        clearInterval(heartbeatInterval)
       }
       setLoading(false)
     })
-    return () => unsubscribe()
+
+    return () => {
+      unsubscribe()
+      clearInterval(heartbeatInterval)
+    }
   }, [])
 
   // 2. All Users List
@@ -73,8 +110,8 @@ export default function Home() {
     )
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs = snapshot.docs
-       .map(doc => ({ id: doc.id,...doc.data() }))
-       .filter(m => m.createdAt)
+      .map(doc => ({ id: doc.id,...doc.data() }))
+      .filter(m => m.createdAt)
       setMessages(msgs)
     })
     return () => unsubscribe()
@@ -163,7 +200,7 @@ export default function Home() {
   if (selectedUser) {
     return (
       <div className="h-screen flex flex-col bg-[#0b141a] max-w-md mx-auto">
-        {/* Chat Header - Fixed */}
+        {/* Chat Header */}
         <div className="bg-[#202c33] px-2 py-2 flex items-center gap-2">
           <button onClick={() => setSelectedUser(null)} className="text-[#aebac1] p-2">
             <ArrowLeft size={24} />
@@ -178,7 +215,7 @@ export default function Home() {
           <MoreVertical size={22} className="text-[#aebac1]" />
         </div>
 
-        {/* Messages - Fixed */}
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 bg-[#0b141a]" style={{backgroundImage: 'url(https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png)'}}>
           {messages.map(msg => (
             <div key={msg.id} className={`flex mb-2 ${msg.uid === user.uid? 'justify-end' : 'justify-start'}`}>
